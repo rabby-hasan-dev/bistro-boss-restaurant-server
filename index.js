@@ -31,8 +31,19 @@ async function run() {
         const cartCollection = client.db("bistroDB").collection('carts');
 
         // users related api
+        app.get('/users', async (req, res) => {
+            const result = await usersCollection.find().toArray();
+            res.send(result)
+        })
+
         app.post('/users', async (req, res) => {
             const users = req.body;
+            const query = { email: users.email };
+            const existingUser = await usersCollection.findOne(query);
+            if (existingUser) {
+                return res.send({ message: 'User already exist' })
+
+            }
             const result = await usersCollection.insertOne(users);
             res.send(result);
         })
@@ -66,7 +77,7 @@ async function run() {
 
         app.delete('/carts/:id', async (req, res) => {
             const id = req.params.id;
-            const query = { _id:new ObjectId(id) }
+            const query = { _id: new ObjectId(id) }
             const result = await cartCollection.deleteOne(query);
             res.send(result)
         })
