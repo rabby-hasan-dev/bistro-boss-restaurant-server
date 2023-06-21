@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 const app = express();
@@ -8,6 +9,23 @@ const port = process.env.PORT || 5000;
 // middleware
 app.use(cors());
 app.use(express.json())
+
+const verifyJWT = (req, res, next) => {
+    // console.log(req.headers);
+    const authorization = req.headers.authorization;
+    if (!authorization) {
+        return res.status(401).send({ error: true, message: 'unauthorized access' });
+    }
+    // bearer token
+    const token = authorization.split(' ')[1];
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECREATE, (error, decoded) => {
+        if (error) {
+            return res.status(401).send({ error: true, message: 'unauthorized access' })
+        }
+        req.decoded = decoded;
+        next();
+    })
+}
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.p6rgmv3.mongodb.net/?retryWrites=true&w=majority`;
@@ -30,8 +48,33 @@ async function run() {
         const reviewsCollection = client.db("bistroDB").collection('reviews');
         const cartCollection = client.db("bistroDB").collection('carts');
 
+        // jwt api
+        app.post('/jwt', (req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECREATE, { expiresIn: '1h' });
+            res.send({ token });
+        })
+        //  warning: use verifyJWT before using verifyAdmin
+        const verifyAdmin= async(req,res,next)=>{
+           const email= req.decoded.email;
+           const query={email:email};
+           const user=await usersCollection.findOne(query);
+           if(user?.role !== 'admin'){
+            return res.status(403).send({error:true, message:'forbidden access'})
+           }
+
+           next();
+
+            
+        }
+
+        /**
+         * 0. don not show the secure links to those who should not  see the links
+         * 1.use jwt token:verifyJWT
+         * 2. use verify admin middleware
+         * */ 
         // users related api
-        app.get('/users', async (req, res) => {
+        app.get('/users', verifyJWT, async (req, res) => {
             const result = await usersCollection.find().toArray();
             res.send(result)
         })
@@ -48,6 +91,8 @@ async function run() {
             res.send(result);
         })
 
+
+
         // admin related api
         app.patch('/users/admin/:id', async (req, res) => {
             const id = req.params.id;
@@ -61,7 +106,24 @@ async function run() {
             res.send(result);
         })
 
-        // menu related api
+        // Security layer: verifyJWt
+        // email same
+        // check admin
+
+        app.get('/users/admin/:email', verifyJWT, async (req, res) => {
+            const email = req.params.email;
+
+            if (req.decoded.email !== email) {
+                res.send({ admin: false })
+            }
+
+            const query = { email: email };
+            const user = await usersCollection.findOne(query);
+            const result = { admin: user?.role === 'admin' };
+            res.send(result);
+        })
+
+        // menu related api 
         app.get('/menu', async (req, res) => {
             const result = await menuCollection.find().toArray();
             res.send(result)
@@ -73,11 +135,19 @@ async function run() {
         })
 
         // cart  related api
-        app.get('/carts', async (req, res) => {
+        app.get('/carts', verifyJWT, async (req, res) => {
+
             const email = req.query.email;
             if (!email) {
                 return res.send([]);
             }
+
+            const decodedEmail = req.decoded.email;
+            if (email !== decodedEmail) {
+                return res.status(403).send({ error: true, message: 'forbidden access' })
+
+            }
+
             const query = { email: email }
             const result = await cartCollection.find(query).toArray();
             res.send(result)
