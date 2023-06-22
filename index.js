@@ -55,26 +55,26 @@ async function run() {
             res.send({ token });
         })
         //  warning: use verifyJWT before using verifyAdmin
-        const verifyAdmin= async(req,res,next)=>{
-           const email= req.decoded.email;
-           const query={email:email};
-           const user=await usersCollection.findOne(query);
-           if(user?.role !== 'admin'){
-            return res.status(403).send({error:true, message:'forbidden access'})
-           }
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email };
+            const user = await usersCollection.findOne(query);
+            if (user?.role !== 'admin') {
+                return res.status(403).send({ error: true, message: 'forbidden access' })
+            }
 
-           next();
+            next();
 
-            
+
         }
 
         /**
          * 0. don not show the secure links to those who should not  see the links
          * 1.use jwt token:verifyJWT
          * 2. use verify admin middleware
-         * */ 
+         * */
         // users related api
-        app.get('/users', verifyJWT, async (req, res) => {
+        app.get('/users', verifyJWT, verifyAdmin, async (req, res) => {
             const result = await usersCollection.find().toArray();
             res.send(result)
         })
@@ -128,6 +128,15 @@ async function run() {
             const result = await menuCollection.find().toArray();
             res.send(result)
         })
+
+        app.post('/menu', verifyJWT, verifyAdmin, async (req, res) => {
+            const newItem = req.body;
+            const result = await menuCollection.insertOne(newItem);
+            res.send(result);
+
+        })
+
+
         // reviews related api
         app.get('/reviews', async (req, res) => {
             const result = await reviewsCollection.find().toArray();
