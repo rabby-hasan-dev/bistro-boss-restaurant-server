@@ -48,6 +48,7 @@ async function run() {
         const menuCollection = client.db("bistroDB").collection('menu');
         const reviewsCollection = client.db("bistroDB").collection('reviews');
         const cartCollection = client.db("bistroDB").collection('carts');
+        const paymentCollection = client.db("bistroDB").collection('payments');
 
         // jwt api
         app.post('/jwt', (req, res) => {
@@ -183,10 +184,11 @@ async function run() {
         })
 
         // Create payment intent
-        app.post("/create-payment-intent", async (req, res) => {
+        app.post("/create-payment-intent", verifyJWT, async (req, res) => {
 
             const { price } = req.body;
-            const amount = price * 100;
+            const amount = parseInt(price * 100);
+
             const paymentIntent = await stripe.paymentIntents.create({
                 amount: amount,
                 currency: "usd",
@@ -195,23 +197,20 @@ async function run() {
             })
 
             res.send({
-                clientSecret:paymentIntent.client_secret
+                clientSecret: paymentIntent.client_secret
             })
-            // const { items } = req.body;
 
-            // // Create a PaymentIntent with the order amount and currency
-            // const paymentIntent = await stripe.paymentIntents.create({
-            //   amount: calculateOrderAmount(items),
-            //   currency: "usd",
-            //   automatic_payment_methods: {
-            //     enabled: true,
-            //   },
-            // });
-
-            // res.send({
-            //   clientSecret: paymentIntent.client_secret,
-            // });
         });
+
+        // payment related api
+        app.post('/payments', async (req, res) => {
+            const payment = req.body;
+            const insertResult = await paymentCollection.insertOne(payment);
+
+            const query = { _id: { $in: payment.cartItems.map(id => new ObjectId(id)) } }
+            const deleteResult = await cartCollection.deleteMany(query);
+            res.send({insertResult,deleteResult});
+        })
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
