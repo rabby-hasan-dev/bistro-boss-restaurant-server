@@ -209,7 +209,21 @@ async function run() {
 
             const query = { _id: { $in: payment.cartItems.map(id => new ObjectId(id)) } }
             const deleteResult = await cartCollection.deleteMany(query);
-            res.send({insertResult,deleteResult});
+            res.send({ insertResult, deleteResult });
+        })
+
+        app.get('/admin-stats', verifyJWT,verifyAdmin, async (req, res) => {
+            const users = await usersCollection.estimatedDocumentCount();
+            const products = await menuCollection.estimatedDocumentCount();
+            const orders = await paymentCollection.estimatedDocumentCount();
+            const payments = await paymentCollection.find().toArray();
+            const revenue = payments.reduce((sum, payment) => sum + payment.price, 0)
+            res.send({
+                users,
+                products,
+                orders,
+                revenue
+            })
         })
 
         // Send a ping to confirm a successful connection
